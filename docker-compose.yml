@@ -1,0 +1,15 @@
+services:
+  it-review-board:
+    image: it-review-board:latest
+    container_name: it-review-board
+    restart: unless-stopped
+    ports:
+      # 왼쪽(호스트 포트)을 사내 환경에 맞게 바꿔서 사용하세요. 예: "80:3000"
+      - "3000:3000"
+    volumes:
+      # DB, 첨부파일, 로그인 세션이 이 폴더에 저장됩니다. 반드시 유지되는 경로로 마운트하세요.
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      # 운영 배포 시 반드시 아래 값을 임의의 긴 임의 문자열로 변경하세요.
+      - SESSION_SECRET=please-change-this-session-secret

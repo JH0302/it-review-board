@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>검토 대기 - IT선정 도입의뢰 사전검토</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">IT선정 도입의뢰<small>관리자</small></div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+    <div class="sidebar-user" id="sidebarUser"></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1>검토 대기 건</h1>
+    </div>
+
+    <div class="content">
+      <div class="category-tabs" id="categoryTabs">
+        <button type="button" class="active" data-category="purchase">구매</button>
+        <button type="button" data-category="maintenance">유지보수</button>
+      </div>
+
+      <div class="panel">
+        <div class="filter-bar">
+          <select id="fPurchaseType">
+            <option value="">전체 구매대상</option>
+          </select>
+          <select id="fYear">
+            <option value="">전체 연도</option>
+          </select>
+          <input type="text" id="fQuery" placeholder="사업명 검색">
+          <button class="btn" id="searchBtn">검색</button>
+          <div class="spacer"></div>
+          <span id="totalCount" style="font-size:12.5px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <div class="panel" style="padding:0;">
+        <table class="list-table">
+          <thead>
+            <tr>
+              <th data-sort="request_date">요청일자</th>
+              <th data-sort="project_name" id="thProjectName">사업명</th>
+              <th data-sort="department">의뢰부서</th>
+              <th data-sort="requester_name">의뢰자</th>
+              <th data-sort="purchase_types" id="thPurchaseType">구매대상</th>
+              <th data-sort="budget">예산(VAT포함)</th>
+              <th data-sort="biz_plan_no" id="thBizPlanNo">사업계획번호</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="listBody">
+            <tr class="empty-row"><td colspan="8">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let currentUser = null;
+let currentCategory = 'purchase';
+
+function populateFilterOptions() {
+  const ptSel = document.getElementById('fPurchaseType');
+  Object.entries(PURCHASE_TYPE_LABEL).forEach(([k, v]) => {
+    const opt = document.createElement('option');
+    opt.value = k; opt.textContent = v;
+    ptSel.appendChild(opt);
+  });
+  const ySel = document.getElementById('fYear');
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear + 1; y >= thisYear - 5; y--) {
+    const opt = document.createElement('option');
+    opt.value = String(y); opt.textContent = y + '년';
+    ySel.appendChild(opt);
+  }
+}
+
+function buildQuery() {
+  const params = new URLSearchParams();
+  params.set('status', 'reviewing');
+  params.set('category', currentCategory);
+  const pt = currentCategory === 'maintenance' ? '' : document.getElementById('fPurchaseType').value;
+  const year = document.getElementById('fYear').value;
+  const q = document.getElementById('fQuery').value.trim();
+  if (pt) params.set('purchase_type', pt);
+  if (year) params.set('year', year);
+  if (q) params.set('q', q);
+  return params.toString();
+}
+
+// 유지보수 건은 구매대상/사업계획번호가 없으므로 목록/필터에서 관련 항목을 숨기고 사업명 열을 넓힘
+function applyListColumnVisibility() {
+  const isMaintenance = currentCategory === 'maintenance';
+  document.getElementById('thPurchaseType').style.display = isMaintenance ? 'none' : '';
+  document.getElementById('thBizPlanNo').style.display = isMaintenance ? 'none' : '';
+  document.getElementById('thProjectName').style.width = isMaintenance ? '30%' : '';
+  document.getElementById('fPurchaseType').style.display = isMaintenance ? 'none' : '';
+}
+
+let allRequests = [];
+let sortKey = null;
+let sortDir = 'asc';
+let currentPage = 1;
+const PAGE_SIZE = 10;
+
+function sortValue(r, key) {
+  switch (key) {
+    case 'request_date': return r.request_date || '';
+    case 'project_name': return r.project_name || '';
+    case 'department': return (r.requester && r.requester.department) || '';
+    case 'requester_name': return (r.requester && r.requester.name) || '';
+    case 'purchase_types': return r.purchase_types.map((t) => PURCHASE_TYPE_LABEL[t] || t).join(', ');
+    case 'budget': return r.budget || 0;
+    case 'biz_plan_no': return r.biz_plan_no || '';
+    default: return '';
+  }
+}
+
+function getSortedRequests() {
+  if (!sortKey) return allRequests;
+  const list = allRequests.slice();
+  list.sort((a, b) => {
+    const va = sortValue(a, sortKey);
+    const vb = sortValue(b, sortKey);
+    const cmp = (typeof va === 'number' && typeof vb === 'number') ? va - vb : String(va).localeCompare(String(vb), 'ko');
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+  return list;
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('th[data-sort]').forEach((th) => {
+    const existing = th.querySelector('.sort-indicator');
+    if (existing) existing.remove();
+    if (th.getAttribute('data-sort') === sortKey) {
+      const span = document.createElement('span');
+      span.className = 'sort-indicator';
+      span.textContent = sortDir === 'asc' ? ' ▲' : ' ▼';
+      th.appendChild(span);
+    }
+  });
+}
+
+function renderPagination(total) {
+  const pager = document.getElementById('pagination');
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (totalPages <= 1) { pager.innerHTML = ''; return; }
+  let html = `<button type="button" data-page="prev" ${currentPage === 1 ? 'disabled' : ''}>이전</button>`;
+  for (let p = 1; p <= totalPages; p++) {
+    html += `<button type="button" data-page="${p}" class="${p === currentPage ? 'active' : ''}">${p}</button>`;
+  }
+  html += `<button type="button" data-page="next" ${currentPage === totalPages ? 'disabled' : ''}>다음</button>`;
+  pager.innerHTML = html;
+  pager.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const p = btn.getAttribute('data-page');
+      const totalPagesNow = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (p === 'prev') currentPage = Math.max(1, currentPage - 1);
+      else if (p === 'next') currentPage = Math.min(totalPagesNow, currentPage + 1);
+      else currentPage = Number(p);
+      renderRows();
+    });
+  });
+}
+
+function renderRows() {
+  const isMaintenance = currentCategory === 'maintenance';
+  const colCount = isMaintenance ? 6 : 8;
+  const sorted = getSortedRequests();
+  document.getElementById('totalCount').textContent = `총 ${sorted.length}건`;
+  updateSortIndicators();
+  const tbody = document.getElementById('listBody');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${colCount}">검토 대기 중인 건이 없습니다.</td></tr>`;
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = sorted.slice(start, start + PAGE_SIZE);
+
+  tbody.innerHTML = pageItems.map((r) => {
+    const purchaseTypes = r.purchase_types.map((t) => PURCHASE_TYPE_LABEL[t] || t).join(', ');
+    return `
+      <tr>
+        <td>${escapeHtml(r.request_date)}</td>
+        <td><a href="/detail.html?id=${r.id}" style="color:var(--primary);font-weight:600;">${escapeHtml(r.project_name)}</a></td>
+        <td>${escapeHtml(r.requester.department)}</td>
+        <td>${escapeHtml(r.requester.name)}</td>
+        ${isMaintenance ? '' : `<td>${escapeHtml(purchaseTypes)}</td>`}
+        <td>${formatMoney(r.budget)}</td>
+        ${isMaintenance ? '' : `<td>${escapeHtml(r.biz_plan_no || '-')}</td>`}
+        <td><a href="/detail.html?id=${r.id}" class="btn btn-sm">상세보기</a></td>
+      </tr>
+    `;
+  }).join('');
+
+  renderPagination(sorted.length);
+}
+
+async function loadList() {
+  applyListColumnVisibility();
+  currentPage = 1;
+  const isMaintenance = currentCategory === 'maintenance';
+  const colCount = isMaintenance ? 6 : 8;
+  const tbody = document.getElementById('listBody');
+  tbody.innerHTML = `<tr class="empty-row"><td colspan="${colCount}">불러오는 중...</td></tr>`;
+  try {
+    const qs = buildQuery();
+    const { requests } = await API.get('/api/requests?' + qs);
+    allRequests = requests;
+    renderRows();
+  } catch (err) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${colCount}">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+(async () => {
+  currentUser = await requireAuth('pending');
+  if (!currentUser) return;
+  if (currentUser.role !== 'admin') {
+    renderAccessDenied();
+    return;
+  }
+  populateFilterOptions();
+  document.querySelectorAll('#categoryTabs button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentCategory = btn.getAttribute('data-category');
+      document.querySelectorAll('#categoryTabs button').forEach((b) => b.classList.toggle('active', b === btn));
+      loadList();
+    });
+  });
+  document.getElementById('searchBtn').addEventListener('click', loadList);
+  document.getElementById('fQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadList(); });
+  document.getElementById('fPurchaseType').addEventListener('change', loadList);
+  document.getElementById('fYear').addEventListener('change', loadList);
+  document.querySelectorAll('th[data-sort]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.getAttribute('data-sort');
+      if (sortKey !== key) {
+        sortKey = key;
+        sortDir = 'asc';
+      } else if (sortDir === 'asc') {
+        sortDir = 'desc';
+      } else {
+        sortKey = null;
+        sortDir = 'asc';
+      }
+      currentPage = 1;
+      renderRows();
+    });
+  });
+  loadList();
+})();
+</script>
+</body>
+</html>

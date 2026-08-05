@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회원가입 - IT선정 도입의뢰 사전검토</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1>회원가입</h1>
+    <p class="sub">도입의뢰 등록을 위한 계정을 생성합니다. (일반 의뢰자 권한으로 생성됩니다)</p>
+    <form id="registerForm">
+      <div class="field">
+        <label>이름</label>
+        <input type="text" name="name" required>
+      </div>
+      <div class="field">
+        <label>사번</label>
+        <input type="text" name="emp_no" required>
+      </div>
+      <div class="field">
+        <label>부서</label>
+        <input type="text" name="department" required>
+      </div>
+      <div class="field">
+        <label>아이디</label>
+        <input type="text" name="username" required>
+      </div>
+      <div class="field">
+        <label>비밀번호 (4자 이상)</label>
+        <input type="password" name="password" required minlength="4">
+      </div>
+      <div class="error-msg" id="errMsg"></div>
+      <button type="submit" class="btn btn-primary">가입하고 시작하기</button>
+    </form>
+    <div class="auth-switch">이미 계정이 있으신가요? <a href="/login.html">로그인</a></div>
+  </div>
+</div>
+<script src="/js/common.js"></script>
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('errMsg');
+  errEl.textContent = '';
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd.entries());
+  try {
+    await API.post('/api/auth/register', payload);
+    window.location.href = '/index.html';
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+});
+</script>
+</body>
+</html>

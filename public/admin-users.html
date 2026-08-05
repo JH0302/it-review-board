@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사용자 권한 관리 - IT선정 도입의뢰 사전검토</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">IT선정 도입의뢰<small>관리자</small></div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+    <div class="sidebar-user" id="sidebarUser"></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1>사용자 권한 관리</h1>
+      <button type="button" class="btn btn-primary" id="openAddModalBtn">+ 관리자 추가</button>
+    </div>
+
+    <div class="content">
+      <div class="panel" style="padding:0;">
+        <table class="list-table">
+          <thead>
+            <tr>
+              <th>아이디</th>
+              <th>이름</th>
+              <th>사번</th>
+              <th>부서</th>
+              <th>가입일</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="listBody">
+            <tr class="empty-row"><td colspan="6">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="addModalOverlay">
+  <div class="modal-box" style="width:520px;">
+    <div class="modal-header">
+      <h2>관리자 추가</h2>
+      <button type="button" class="modal-close" id="closeAddModalBtn">&times;</button>
+    </div>
+
+    <div class="filter-bar" style="margin-bottom:14px;">
+      <input type="text" id="empNoQuery" placeholder="사번으로 검색" style="flex:1;border:1px solid var(--border);border-radius:5px;padding:8px 10px;font-size:13px;">
+      <button type="button" class="btn btn-primary" id="empNoSearchBtn">검색</button>
+    </div>
+
+    <div id="searchResults" style="min-height:60px;font-size:13px;color:var(--text-muted);">사번을 입력해 검색해주세요.</div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let currentUser = null;
+
+async function loadAdmins() {
+  const tbody = document.getElementById('listBody');
+  tbody.innerHTML = '<tr class="empty-row"><td colspan="6">불러오는 중...</td></tr>';
+  try {
+    const { users } = await API.get('/api/users?role=admin');
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">등록된 관리자가 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map((u) => {
+      const isSelf = u.id === currentUser.id;
+      const actionHtml = isSelf
+        ? '<span style="color:var(--text-muted);font-size:12px;">본인</span>'
+        : `<button type="button" class="btn btn-sm" data-remove-admin="${u.id}">관리자 해제</button>`;
+      return `
+        <tr>
+          <td>${escapeHtml(u.username)}</td>
+          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.emp_no)}</td>
+          <td>${escapeHtml(u.department)}</td>
+          <td>${escapeHtml(u.created_at || '-')}</td>
+          <td>${actionHtml}</td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('[data-remove-admin]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-remove-admin');
+        if (!confirm('이 사용자의 관리자 권한을 해제하시겠습니까?')) return;
+        try {
+          await API.patch(`/api/users/${id}/role`, { role: 'requester' });
+          showToast('관리자 권한이 해제되었습니다.');
+          loadAdmins();
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function openAddModal() {
+  document.getElementById('empNoQuery').value = '';
+  document.getElementById('searchResults').innerHTML = '사번을 입력해 검색해주세요.';
+  document.getElementById('addModalOverlay').classList.remove('hidden');
+  document.getElementById('empNoQuery').focus();
+}
+
+function closeAddModal() {
+  document.getElementById('addModalOverlay').classList.add('hidden');
+}
+
+async function searchByEmpNo() {
+  const q = document.getElementById('empNoQuery').value.trim();
+  const resultsEl = document.getElementById('searchResults');
+  if (!q) {
+    resultsEl.innerHTML = '사번을 입력해 검색해주세요.';
+    return;
+  }
+  resultsEl.innerHTML = '검색 중...';
+  try {
+    const { users } = await API.get('/api/users?emp_no=' + encodeURIComponent(q));
+    if (users.length === 0) {
+      resultsEl.innerHTML = '일치하는 사용자가 없습니다. (먼저 회원가입이 되어 있어야 합니다)';
+      return;
+    }
+    resultsEl.innerHTML = `
+      <table class="list-table">
+        <thead><tr><th>사번</th><th>이름</th><th>부서</th><th>아이디</th><th></th></tr></thead>
+        <tbody>
+          ${users.map((u) => `
+            <tr>
+              <td>${escapeHtml(u.emp_no)}</td>
+              <td>${escapeHtml(u.name)}</td>
+              <td>${escapeHtml(u.department)}</td>
+              <td>${escapeHtml(u.username)}</td>
+              <td>${u.role === 'admin'
+                ? '<span style="color:var(--text-muted);font-size:12px;">이미 관리자</span>'
+                : `<button type="button" class="btn btn-sm btn-primary" data-add-admin="${u.id}">추가</button>`}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    resultsEl.querySelectorAll('[data-add-admin]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-add-admin');
+        try {
+          await API.patch(`/api/users/${id}/role`, { role: 'admin' });
+          showToast('관리자로 추가되었습니다.');
+          closeAddModal();
+          loadAdmins();
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+  } catch (err) {
+    resultsEl.innerHTML = escapeHtml(err.message);
+  }
+}
+
+(async () => {
+  currentUser = await requireAuth('users');
+  if (!currentUser) return;
+  if (currentUser.role !== 'admin') {
+    renderAccessDenied();
+    return;
+  }
+  loadAdmins();
+
+  document.getElementById('openAddModalBtn').addEventListener('click', openAddModal);
+  document.getElementById('closeAddModalBtn').addEventListener('click', closeAddModal);
+  document.getElementById('addModalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'addModalOverlay') closeAddModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('addModalOverlay').classList.contains('hidden')) closeAddModal();
+  });
+  document.getElementById('empNoSearchBtn').addEventListener('click', searchByEmpNo);
+  document.getElementById('empNoQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchByEmpNo(); });
+})();
+</script>
+</body>
+</html>
