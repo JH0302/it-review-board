@@ -79,36 +79,9 @@ const STATUS_LABEL = { reviewing: '검토중', completed: '검토완료' };
 const REQUEST_CATEGORY_LABEL = { purchase: '구매', maintenance: '유지보수' };
 const PURCHASE_TYPE_LABEL = { hw: 'H/W', sw: 'S/W', si: '개발용역', lease_sw: '임차 S/W', etc: '기타' };
 
-// 첨부파일 카테고리: 공통(맨 앞) + 구매/유지보수 전용 + 공통(맨 뒤) (신규 등록 폼에서 구분에 따라 다른 목록을 보여줌)
-const COMMON_FILE_CATEGORY_LABEL_FIRST = {
-  pre_estimate: '사전견적서',
-};
-const PURCHASE_FILE_CATEGORY_LABEL = {
-  purchase_introduction_request: '도입의뢰 문서',
-  purchase_detail: '세부구매내역',
-  disposal_detail: '불용매각 상세',
-  build_requirements: '구축요건정의서',
-  tech_review: '기술검토 결과서',
-  security_review: '보안성검토결과서',
-  biz_proposal: '사업추진안(부의자료)',
-  biz_approval: '사업승인문서',
-  budget_allocation: '예산배정문서',
-};
-const MAINTENANCE_FILE_CATEGORY_LABEL = {
-  biz_budget_request: '사업추진의뢰 및 예산배정 요청 문서',
-  proposal_doc: '추진(안)',
-  introduction_request: '도입의뢰',
-  auto_renewal_checklist: '자동연장체크리스트',
-};
-const COMMON_FILE_CATEGORY_LABEL_LAST = {
-  etc_required_doc: '기타 필요 문서',
-};
-// 상세페이지 등에서 카테고리 키 -> 라벨 조회용 통합 맵
+// 첨부파일: 문서 종류 구분 없이 단일 카테고리로 통합
 const FILE_CATEGORY_LABEL = {
-  ...COMMON_FILE_CATEGORY_LABEL_FIRST,
-  ...PURCHASE_FILE_CATEGORY_LABEL,
-  ...MAINTENANCE_FILE_CATEGORY_LABEL,
-  ...COMMON_FILE_CATEGORY_LABEL_LAST,
+  attachment: '첨부파일',
 };
 
 // Guards current page & renders sidebar nav/user info for the given nav key. Returns the current user or null (redirects to login).

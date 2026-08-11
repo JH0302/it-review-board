@@ -22,7 +22,7 @@ const tempUpload = multer({
   limits: { fileSize: 50 * 1024 * 1024, files: 60 },
 });
 
-const uploadFields = FILE_CATEGORY_KEYS.map((k) => ({ name: k, maxCount: 10 }));
+const uploadFields = FILE_CATEGORY_KEYS.map((k) => ({ name: k, maxCount: 20 }));
 
 // multer/busboy는 멀티파트 파일명을 기본적으로 latin1로 디코딩하므로,
 // 브라우저가 UTF-8로 보낸 한글 파일명은 latin1 -> utf8 재해석으로 복원해야 함.

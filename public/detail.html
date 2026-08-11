@@ -69,27 +69,16 @@ function renderDetail(data) {
 
   const purchaseTypes = data.purchase_types.map((t) => PURCHASE_TYPE_LABEL[t] || t).join(', ');
 
-  const filesByCategory = {};
-  data.files.forEach((f) => {
-    (filesByCategory[f.category] = filesByCategory[f.category] || []).push(f);
-  });
-  const fileListHtml = Object.keys(FILE_CATEGORY_LABEL).map((cat) => {
-    const files = filesByCategory[cat] || [];
-    if (files.length === 0) return '';
-    return `
-      <div style="margin-bottom:10px;">
-        <div class="file-cat" style="font-weight:600;color:var(--text);margin-bottom:4px;">${escapeHtml(FILE_CATEGORY_LABEL[cat])}</div>
-        <ul class="file-list">
-          ${files.map((f) => `
-            <li>
-              <span>${escapeHtml(f.original_name)} <span style="color:var(--text-muted);">(${formatBytes(f.size)})</span></span>
-              <a href="${fileDownloadUrl(f.id)}" class="btn btn-sm">다운로드</a>
-            </li>
-          `).join('')}
-        </ul>
-      </div>
-    `;
-  }).join('') || '<p style="color:var(--text-muted);font-size:13px;">첨부된 파일이 없습니다.</p>';
+  const fileListHtml = data.files.length ? `
+    <ul class="file-list">
+      ${data.files.map((f) => `
+        <li>
+          <span>${escapeHtml(f.original_name)} <span style="color:var(--text-muted);">(${formatBytes(f.size)})</span></span>
+          <a href="${fileDownloadUrl(f.id)}" class="btn btn-sm">다운로드</a>
+        </li>
+      `).join('')}
+    </ul>
+  ` : '<p style="color:var(--text-muted);font-size:13px;">첨부된 파일이 없습니다.</p>';
 
   const isAdminView = currentUser.role === 'admin';
   const commentsHtml = data.comments.length
@@ -312,14 +301,6 @@ function budgetLabelFor(category) {
     : '소요예산(원, 부가세 포함)';
 }
 
-function fileCategoriesFor(category) {
-  return {
-    ...COMMON_FILE_CATEGORY_LABEL_FIRST,
-    ...(category === 'maintenance' ? MAINTENANCE_FILE_CATEGORY_LABEL : PURCHASE_FILE_CATEGORY_LABEL),
-    ...COMMON_FILE_CATEGORY_LABEL_LAST,
-  };
-}
-
 function openEditModal() {
   const data = currentData;
   const isPurchase = data.request_category !== 'maintenance';
@@ -397,15 +378,18 @@ function openEditModal() {
       <div id="editExistingFiles">
         ${data.files.length ? data.files.map((f) => `
           <div class="file-slot" data-file-row="${f.id}" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <span style="font-size:12.5px;">${escapeHtml(FILE_CATEGORY_LABEL[f.category] || f.category)} - ${escapeHtml(f.original_name)} <span style="color:var(--text-muted);">(${formatBytes(f.size)})</span></span>
+            <span style="font-size:12.5px;">${escapeHtml(f.original_name)} <span style="color:var(--text-muted);">(${formatBytes(f.size)})</span></span>
             <button type="button" class="btn btn-sm btn-danger" data-delete-file="${f.id}">삭제</button>
           </div>
         `).join('') : '<p style="color:var(--text-muted);font-size:12.5px;">첨부된 파일이 없습니다.</p>'}
       </div>
     </div>
     <div class="field full">
-      <label>새 첨부파일 추가 (선택, 각 항목별 다중 첨부 가능)</label>
-      <div id="editFileSlots" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:6px;"></div>
+      <label>새 첨부파일 추가 (선택, 다중 첨부 가능)</label>
+      <div class="file-slot">
+        <input type="file" name="attachment" id="editAttachmentInput" multiple>
+        <div class="picked-files" id="editAttachmentPicked"></div>
+      </div>
     </div>
   `;
 
@@ -414,21 +398,10 @@ function openEditModal() {
     e.target.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
   });
 
-  const slotsEl = document.getElementById('editFileSlots');
-  Object.entries(fileCategoriesFor(data.request_category)).forEach(([k, v]) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'file-slot';
-    wrap.innerHTML = `
-      <div class="file-slot-label">${escapeHtml(v)}</div>
-      <input type="file" name="${k}" multiple>
-      <div class="picked-files"></div>
-    `;
-    const input = wrap.querySelector('input[type=file]');
-    const picked = wrap.querySelector('.picked-files');
-    input.addEventListener('change', () => {
-      picked.textContent = input.files.length ? `${input.files.length}개 파일 선택됨` : '';
-    });
-    slotsEl.appendChild(wrap);
+  const editAttachmentInput = document.getElementById('editAttachmentInput');
+  const editAttachmentPicked = document.getElementById('editAttachmentPicked');
+  editAttachmentInput.addEventListener('change', () => {
+    editAttachmentPicked.textContent = editAttachmentInput.files.length ? `${editAttachmentInput.files.length}개 파일 선택됨` : '';
   });
 
   grid.querySelectorAll('[data-delete-file]').forEach((btn) => {
@@ -529,12 +502,10 @@ async function load() {
       fd.set('pre_budget_consult', form.pre_budget_consult.value);
     }
 
-    Object.keys(fileCategoriesFor(currentData.request_category)).forEach((k) => {
-      const input = form.querySelector(`input[type=file][name="${k}"]`);
-      if (input && input.files) {
-        Array.from(input.files).forEach((f) => fd.append(k, f));
-      }
-    });
+    const editAttachmentInput = document.getElementById('editAttachmentInput');
+    if (editAttachmentInput && editAttachmentInput.files) {
+      Array.from(editAttachmentInput.files).forEach((f) => fd.append('attachment', f));
+    }
 
     const btn = document.getElementById('editSubmitBtn');
     btn.disabled = true;

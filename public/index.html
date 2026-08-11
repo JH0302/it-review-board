@@ -150,8 +150,11 @@
         </div>
 
         <div class="field full">
-          <label>첨부파일 (선택, 각 항목별 다중 첨부 가능)</label>
-          <div id="fileSlots" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:6px;"></div>
+          <label>첨부파일 (선택, 다중 첨부 가능)</label>
+          <div class="file-slot">
+            <input type="file" name="attachment" id="newAttachmentInput" multiple>
+            <div class="picked-files" id="newAttachmentPicked"></div>
+          </div>
         </div>
       </div>
 
@@ -341,28 +344,12 @@ function buildNewForm(category) {
     ptGroup.appendChild(label);
   });
 
-  const activeFileCategories = {
-    ...COMMON_FILE_CATEGORY_LABEL_FIRST,
-    ...(category === 'maintenance' ? MAINTENANCE_FILE_CATEGORY_LABEL : PURCHASE_FILE_CATEGORY_LABEL),
-    ...COMMON_FILE_CATEGORY_LABEL_LAST,
+  const input = document.getElementById('newAttachmentInput');
+  const picked = document.getElementById('newAttachmentPicked');
+  picked.textContent = '';
+  input.onchange = () => {
+    picked.textContent = input.files.length ? `${input.files.length}개 파일 선택됨` : '';
   };
-  const slotsEl = document.getElementById('fileSlots');
-  slotsEl.innerHTML = '';
-  Object.entries(activeFileCategories).forEach(([k, v]) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'file-slot';
-    wrap.innerHTML = `
-      <div class="file-slot-label">${escapeHtml(v)}</div>
-      <input type="file" name="${k}" multiple>
-      <div class="picked-files"></div>
-    `;
-    const input = wrap.querySelector('input[type=file]');
-    const picked = wrap.querySelector('.picked-files');
-    input.addEventListener('change', () => {
-      picked.textContent = input.files.length ? `${input.files.length}개 파일 선택됨` : '';
-    });
-    slotsEl.appendChild(wrap);
-  });
 }
 
 // 유지보수는 사업계획번호/구매대상/불용매각여부 대신 '예산검토 사전협의 여부'를 사용
@@ -479,17 +466,10 @@ function closeNewModal() {
     fd.set('group_joint_business', form.group_joint_business.value);
     fd.set('special_notes', form.special_notes.value);
 
-    const activeFileCategories = {
-      ...COMMON_FILE_CATEGORY_LABEL_FIRST,
-      ...(category === 'maintenance' ? MAINTENANCE_FILE_CATEGORY_LABEL : PURCHASE_FILE_CATEGORY_LABEL),
-      ...COMMON_FILE_CATEGORY_LABEL_LAST,
-    };
-    Object.keys(activeFileCategories).forEach((k) => {
-      const input = form.querySelector(`input[type=file][name="${k}"]`);
-      if (input && input.files) {
-        Array.from(input.files).forEach((f) => fd.append(k, f));
-      }
-    });
+    const attachmentInput = document.getElementById('newAttachmentInput');
+    if (attachmentInput && attachmentInput.files) {
+      Array.from(attachmentInput.files).forEach((f) => fd.append('attachment', f));
+    }
 
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
